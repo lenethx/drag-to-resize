@@ -4,11 +4,10 @@
 // @description	  Drag to resize images, based on code in the RES.
 // @author        Kabaka
 // @version       1.3
-// @source        https://github.com/lenethx/drag-to-resize
+// @source        https://github.com/kabaka/drag-to-resize
 // @include       *
 // @exclude       http://www.chess.com/*
 // @exclude       http://chess.com/*
-// @exclude       https://neocities.org/*
 // ==/UserScript==
 
 /*
@@ -103,12 +102,7 @@ function findNewImages() {
   });
 
   mutationObserver.observe(document.documentElement, {
-    attributes: true,
-    characterData: true,
     childList: true,
-    subtree: true,
-    attributeOldValue: true,
-    characterDataOldValue: true
   });
 }
 
@@ -170,7 +164,10 @@ function stopEvent(e) {
  */
 function makeImageZoomable(imgElement) {
   dragTargetData = {};
-
+	
+  
+  
+  
   imgElement.addEventListener('mousedown', function(e) {
     /*
      * This is so we can support the command key on Mac. The combination of OS
@@ -184,6 +181,12 @@ function makeImageZoomable(imgElement) {
     if (e.button !== 0)
       return false;
 
+    try{ //probably should keep track of existsing listeners better instead of using try
+    	document.removeEventListener('mousemove', onMouseMove, false);
+      dragTargetData.dragSize = false;
+      document.removeEventListener('mouseout', onTabExit, false);
+    } catch (error) {}
+    
     // Store some data about the image in case we want to restore size later.
 
     var myImageData = getImageData(e);
@@ -197,7 +200,43 @@ function makeImageZoomable(imgElement) {
 
     dragTargetData.image_width = e.target.width;
     dragTargetData.dragSize    = getDragSize(e);
+		
+    onMouseMove = function(f) {
 
+      if (!dragTargetData.dragSize)
+        return true;
+
+      e.target.style.maxWidth =
+        e.target.style.width  =
+        ((getDragSize(f)) * dragTargetData.image_width / dragTargetData.dragSize) + "px";
+
+      e.target.style.maxHeight = '';
+      e.target.style.height    = 'auto';
+      e.target.style.zIndex    = 1000; // Make sure the image is on top.
+
+      if (e.target.style.position == '') {
+        e.target.style.position = 'relative';
+      }
+
+      getImageData(e).resized = true;
+    }
+    
+    onTabExit = function(g){
+      console.log(g.buttons & 1);
+      g = g ? g : window.event;
+      var from = g.relatedTarget || g.toElement;
+      if ((!from || from.nodeName == "HTML") && (g.buttons & 1) === 0) {
+        document.removeEventListener('mousemove', onMouseMove, false);
+        dragTargetData.dragSize = false;
+        document.removeEventListener('mouseout', onTabExit, false);
+      }
+    }
+    
+    document.addEventListener('mousemove', onMouseMove , false);
+    
+    //Images wont continue being resized if mouse is lifted outside tab, unless mouse is still pressed on reenter
+    document.addEventListener('mouseout', onTabExit , false);
+    
     e.preventDefault();
   }, true);
 
@@ -247,36 +286,18 @@ function makeImageZoomable(imgElement) {
     return stopEvent(e);
   }, true);
 
-  imgElement.addEventListener('mousemove', function(e) {
-    if (!dragTargetData.dragSize)
-      return true;
-
-    e.target.style.maxWidth =
-      e.target.style.width  =
-      ((getDragSize(e)) * dragTargetData.image_width / dragTargetData.dragSize) + "px";
-
-    e.target.style.maxHeight = '';
-    e.target.style.height    = 'auto';
-    e.target.style.zIndex    = 1000; // Make sure the image is on top.
-
-    if (e.target.style.position == '') {
-      e.target.style.position = 'relative';
-    }
-
-    getImageData(e).resized = true;
-  }, false);
-
-  imgElement.addEventListener('mouseout', function(e) {
+  
+	function onMouseUp (e) {
     dragTargetData.dragSize = false;
+    
+    document.removeEventListener('mousemove', onMouseMove, false);
+    document.removeEventListener('mouseout', onTabExit, false);
+    document.removeEventListener('mouseup', onMouseUp, false);
 
     return !getImageData(e).resized;
-  }, false);
+  }
 
-  imgElement.addEventListener('mouseup', function(e) {
-    dragTargetData.dragSize = false;
-
-    return !getImageData(e).resized;
-  }, true);
+  document.addEventListener('mouseup',onMouseUp , true);
 
   imgElement.addEventListener('click', function(e) {
     if (e.ctrlKey != 0 || (e.metaKey != null && e.metaKey != 0))
@@ -286,7 +307,7 @@ function makeImageZoomable(imgElement) {
 
     if (getImageData(e).resized === false)
       return true;
-
+    
     return stopEvent(e);
   }, false);
 }
